@@ -23,11 +23,13 @@ def detect_objects(ego_id, ego_pos, veh_ids):
         veh_pos_w_noise = (veh_pos[0] + noise[0], veh_pos[1] + noise[1])
         
         confidence = max(0.1, 1.0 - (dist/SENSOR_RANGE))
+        variance = POS_NOISE**2
         
         detection = {
             'obj_id': veh_id,
             'pos': veh_pos_w_noise,
             'confidence': confidence,
+            'variance': variance,
             'detected_by': ego_id
         }
         
@@ -75,6 +77,64 @@ def nms_fusion(detections, dist_threshold = 5.0):
                 used[j] = True
     
     return fused
+
+def weighted_nms_fusion(detections, dist_threshold = 5.0):
+    sorted_detections = sorted(detections, key = lambda d: d['confidence'], reverse = True)
+    
+    fused = []
+    used = [False] * len(sorted_detections)
+    
+    for i in range (len(sorted_detections)):
+        if used[i]:
+            continue
+        
+        group = [sorted_detections[i]]
+        used[i] = True
+        
+        
+        # create group of detections close to primary detection being looked at
+        for j in range(i+1, len(sorted_detections)):
+            if used[j]:
+                continue
+            dist = math.dist(sorted_detections[i]['pos'], sorted_detections[j]['pos'])
+            if dist < dist_threshold:
+                group.append(sorted_detections[j])
+                used[j] = True
+        
+        # find weights
+        weights = []
+        for det in group:
+            w = det['confidence'] / det['variance']
+            weights.append(w)
+        
+        # find fused postiions
+        x_fused = sum(det['pos'][0] * w for det, w in zip(group, weights)) / sum(weights)
+        y_fused = sum(det['pos'][1] * w for det, w in zip(group, weights)) / sum(weights)
+        fused.append({
+            'pos': (x_fused, y_fused),
+            'obj_id': [det['obj_id'] for det in group] })
+        
+    return fused
+
+def get_error(fused_det, ego_id, positions):
+    errors = {}
+    for det in fused_det:
+        det_pos = det['pos']
+        
+        # if weighted
+        if isinstance(det['obj_id'], list):
+            obj_ids = det['obj_id']
+        # if regular
+        else:
+            obj_ids = [det['obj_id']]
+        for obj_id in obj_ids:
+            if obj_id != ego_id:
+                if math.dist(positions[ego_id], positions[obj_id]) <= COMM_RANGE:
+                    error = math.dist(det_pos, positions[obj_id])
+                    errors[obj_id] = error
+    return errors
+            
+        
         
 
 def run_sim():
@@ -115,8 +175,17 @@ def run_sim():
                 combined_detections = [d for d in combined_detections if d['obj_id'] != veh_id]
                 print(f"  {veh_id}: {len(combined_detections)} total detections")
                 
-                fused_detections = nms_fusion(combined_detections)
-                print(f"  {veh_id}: {len(fused_detections)} fused detections")
+                nms_fused_detections = nms_fusion(combined_detections)
+                print(f"  {veh_id}: {len(nms_fused_detections)} nms fused detections")
+                weighted_nms_fused_detections = weighted_nms_fusion(combined_detections)
+                print(f"  {veh_id}: {len(weighted_nms_fused_detections)} w-nms fused detections")
+                nms_error = get_error(nms_fused_detections, veh_id, positions)
+                for car, error in nms_error.items():
+                    print(f"  {veh_id} nms error for {car}: {error:.3f}")
+                weighted_nms_error = get_error(weighted_nms_fused_detections, veh_id, positions)
+                for car, error in weighted_nms_error.items():
+                    print(f"  {veh_id} w-nms error for {car}: {error:.3f}")
+                
                 
 #                for detection in fused_detections:
 #                    print(f"    -> Object at ({detection['pos'][0]:.1f}, {detection['pos'][1]:.1f}), conf={detection['confidence']:.2f}")
