@@ -7,3 +7,13 @@
     <vehicle id="carB" type="car" route="r0" depart="0" departPos="50"/>
 </routes>
 
+
+<!-- <routes>
+    <vType id="car" accel="2.6" decel="4.5" sigma="0.5" length="4.5" maxSpeed="15"/>
+    <route id="route_0" edges="A0A1"/>
+    <route id="route_1" edges="A1A0"/>
+    <route id="route_2" edges="A0A1"/>
+    <flow id="flow_0" type="car" route="route_0" begin="0" end="150" period="5" color="1,0,0"/>
+    <flow id="flow_1" type="car" route="route_1" begin="0" end="150" period="5" color="0,1,0"/>
+    <flow id="flow_2" type="car" route="route_2" begin="0" end="150" period="5" color="0,0,1"/>
+</routes> -->
